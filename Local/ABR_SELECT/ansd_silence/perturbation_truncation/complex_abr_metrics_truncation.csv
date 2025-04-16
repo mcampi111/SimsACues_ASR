@@ -1,0 +1,14 @@
+Category,NumSamples,PeakLatency_ms,TroughLatency_ms,PeakAmplitude_uV,TroughAmplitude_uV,PeakToTroughAmplitude_uV,WaveV_Latency_ms,WaveV_Amplitude_uV,PerturbationType
+Vowel,865,0.5,0.0,9.5373,0.0475,9.4899,,,truncation
+Stop,644,0.45,0.0,6.1092,-0.0443,6.1535,,,truncation
+Epenthetic,18,0.4,0.0,6.835,0.2527,6.5823,,,truncation
+Silence,136,0.45,3.25,6.0239,-0.6297,6.6536,,,truncation
+Fricative,371,0.5,0.0,8.067,-0.0564,8.1234,,,truncation
+Nasal,217,0.5,0.0,6.3979,-0.0453,6.4432,,,truncation
+Liquid,220,0.5,0.0,7.9163,0.0444,7.8719,,,truncation
+Syllabic Consonant,7,0.5,4.4,8.7593,-2.2209,10.9802,,,truncation
+Glide,77,0.5,0.0,6.1569,-0.2668,6.4237,,,truncation
+Glottal Stop,56,0.45,0.0,6.6951,0.1016,6.5935,,,truncation
+Flap,30,0.5,0.0,7.2051,0.1818,7.0233,,,truncation
+Affricate,25,0.6,2.85,9.2003,-1.1833,10.3837,,,truncation
+Unknown,11,0.4,0.0,6.9011,0.0844,6.8168,,,truncation

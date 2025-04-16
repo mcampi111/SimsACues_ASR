@@ -1,0 +1,64 @@
+Job started at Fri Apr  4 20:21:55 CEST 2025
+Running on node: maestro-1044
+Allocated CPUs: 32
+Starting OT analysis...
+Identifying TEST speakers...
+Found 28 TEST speakers: FADG0, FAKS0, FASW0, FAWF0, FCAU0, FCFT0, FCMH0, FCMR0, FDAC1, FDHC0, FDRD1, FDRW0, FKMS0, FLNH0, MABW0, MAHH0, MBDG0, MBJK0, MBNS0, MBPM0, MBWM0, MCHH0, MCMJ0, MDAB0, MDLF0, MDLS0, MDSC0, MJSW0
+Loading perturbation types for TEST files...
+Loaded 10716 perturbation type entries for TEST files
+
+Perturbation type distribution for TEST files:
+  loss: 2642 entries (24.65%)
+  jitter: 2675 entries (24.96%)
+  truncation: 2675 entries (24.96%)
+  scattered_jitter: 2724 entries (25.42%)
+
+Loading neurogram data with perturbation info...
+Loaded 10731 neurograms
+
+Perturbation type distribution in loaded neurograms:
+  scattered_jitter: 2725 neurograms
+  jitter: 2681 neurograms
+  truncation: 2677 neurograms
+  loss: 2648 neurograms
+
+Loading formant data...
+Loaded 10471 formant measurements
+
+Merging neurogram and formant data...
+Merged dataframe has 114446 rows
+
+Perturbation type distribution after merge:
+  truncation: 28717 entries
+  jitter: 28713 entries
+  loss: 28558 entries
+  scattered_jitter: 28458 entries
+
+Saving merged data to /pasteur/helix/scratch/mcampi/OT/results/ANSD_OT_Results/merged_data.pkl
+
+Computing mean formant values...
+Extracting neurogram CF values...
+
+Data distribution by category and perturbation type:
+PerturbationType    jitter  loss  scattered_jitter  truncation
+Category_x                                                    
+Affricate               80    95                90          73
+Epenthetic              87   119               117          71
+Flap                   260   206               276         176
+Fricative             3258  3297              3406        3550
+Glide                  485   545               562         518
+Glottal Stop           506   352               409         512
+Liquid                2757  2695              2638        3141
+Nasal                 2441  2653              2410        2598
+Silence               2760  2980              2740        2720
+Stop                  6111  5720              5776        5869
+Syllabic Consonant      38    31                31          17
+Vowel                 9830  9757              9902        9396
+
+Computing distances between formants and center frequencies by perturbation type...
+Using 96 CPU cores for parallel processing
+Loaded 140 existing results from checkpoint
+Found 13 categories and 4 perturbation types
+Perturbation types: loss, truncation, jitter, scattered_jitter
+Total combinations to process: 936
+Already processed: 140

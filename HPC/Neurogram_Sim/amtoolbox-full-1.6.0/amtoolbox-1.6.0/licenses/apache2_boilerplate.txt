@@ -1,0 +1,7 @@
+This file is licensed unter the Apache License Version 2.0 which details can 
+be found in the AMT directory "licences" and at 
+<http://www.apache.org/licenses/LICENSE-2.0>. 
+You must not use this file except in compliance with the Apache License 
+Version 2.0. Unless required by applicable law or agreed to in writing, this 
+file is distributed on an "as is" basis, without warranties or conditions 
+of any kind, either express or implied.

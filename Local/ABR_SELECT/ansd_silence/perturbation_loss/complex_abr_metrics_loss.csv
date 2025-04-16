@@ -1,0 +1,14 @@
+Category,NumSamples,PeakLatency_ms,TroughLatency_ms,PeakAmplitude_uV,TroughAmplitude_uV,PeakToTroughAmplitude_uV,WaveV_Latency_ms,WaveV_Amplitude_uV,PerturbationType
+Vowel,861,0.5,0.0,9.2332,0.0923,9.1409,,,loss
+Stop,623,0.45,0.0,5.803,-0.0196,5.8226,,,loss
+Fricative,357,0.5,0.0,8.2396,0.025,8.2146,,,loss
+Glide,79,0.5,0.0,6.8467,-0.207,7.0536,,,loss
+Silence,149,0.45,3.3,5.9053,-0.694,6.5993,,,loss
+Liquid,188,0.5,0.0,8.4728,0.0848,8.388,,,loss
+Nasal,229,0.45,0.0,6.4472,0.0019,6.4452,,,loss
+Epenthetic,27,0.45,0.0,6.2122,0.0943,6.1179,,,loss
+Glottal Stop,39,0.45,0.0,7.2697,0.0188,7.2509,,,loss
+Flap,33,0.5,0.0,6.6301,0.1837,6.4464,,,loss
+Affricate,26,0.5,2.55,7.7145,-0.1441,7.8586,,,loss
+Unknown,25,0.45,3.45,6.9353,-0.7849,7.7202,,,loss
+Syllabic Consonant,12,0.5,3.05,8.6358,-0.8991,9.5349,,,loss

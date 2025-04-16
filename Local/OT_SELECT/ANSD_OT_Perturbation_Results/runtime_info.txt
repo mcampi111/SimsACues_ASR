@@ -1,0 +1,5 @@
+Analysis started: Wed Apr  9 16:50:06 2025
+Analysis completed: Wed Apr  9 18:10:48 2025
+Total runtime: 1h 20m 41s
+Processed 114446 merged data points
+Generated 864 distance results

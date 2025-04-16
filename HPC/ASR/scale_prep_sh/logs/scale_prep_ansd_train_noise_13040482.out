@@ -1,0 +1,5 @@
+All required packages imported successfully
+Loading /pasteur/appa/homes/mcampi/ASR_ANSD/Neurogram_Sim/TIMIT_mat/TIMIT_neurogram_ansd_train_with_noise.mat...
+Initial data shape: (150, 7678082)
+After transpose shape: (7678082, 150)
+Saved scaled neurogram to /pasteur/appa/homes/mcampi/ASR_ANSD/ASR/TIMIT_Neuro_ANSD/TIMIT_neurogram_ansd_train_with_noise_scaled.npy, shape: (7678082, 150)

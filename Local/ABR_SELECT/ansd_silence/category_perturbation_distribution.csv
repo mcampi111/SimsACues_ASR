@@ -1,0 +1,53 @@
+Category,PerturbationType,Count
+Vowel,loss,861
+Vowel,truncation,865
+Vowel,jitter,883
+Vowel,scattered_jitter,897
+Stop,jitter,677
+Stop,truncation,644
+Stop,loss,623
+Stop,scattered_jitter,669
+Flap,scattered_jitter,45
+Flap,jitter,41
+Flap,truncation,30
+Flap,loss,33
+Epenthetic,truncation,18
+Epenthetic,jitter,21
+Epenthetic,scattered_jitter,29
+Epenthetic,loss,27
+Silence,truncation,136
+Silence,jitter,138
+Silence,loss,149
+Silence,scattered_jitter,137
+Fricative,loss,357
+Fricative,jitter,341
+Fricative,scattered_jitter,370
+Fricative,truncation,371
+Liquid,scattered_jitter,179
+Liquid,jitter,187
+Liquid,loss,188
+Liquid,truncation,220
+Nasal,scattered_jitter,202
+Nasal,loss,229
+Nasal,jitter,200
+Nasal,truncation,217
+Glottal Stop,jitter,58
+Glottal Stop,truncation,56
+Glottal Stop,loss,39
+Glottal Stop,scattered_jitter,42
+Glide,loss,79
+Glide,jitter,72
+Glide,scattered_jitter,88
+Glide,truncation,77
+Syllabic Consonant,jitter,16
+Syllabic Consonant,truncation,7
+Syllabic Consonant,scattered_jitter,14
+Syllabic Consonant,loss,12
+Affricate,jitter,26
+Affricate,truncation,25
+Affricate,scattered_jitter,33
+Affricate,loss,26
+Unknown,jitter,21
+Unknown,scattered_jitter,20
+Unknown,truncation,11
+Unknown,loss,25

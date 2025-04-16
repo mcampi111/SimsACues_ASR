@@ -1,0 +1,7 @@
+This file is licences under the terms of the UGent Academic License,
+which details can be found in the AMT directory "licences" and at 
+<https://raw.githubusercontent.com/HearingTechnology/Verhulstetal2018Model/master/license.txt>.
+For non-commercial academic research, you can use this file and/or modify it 
+under the terms of that license. This file is distributed without any warranty;
+without even the implied warranty of merchantability or fitness for a 
+particular purpose. 

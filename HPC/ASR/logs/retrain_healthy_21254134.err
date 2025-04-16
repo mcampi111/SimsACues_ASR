@@ -1,0 +1,45 @@
+2025-04-16 11:03:27.553639: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:9342] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+2025-04-16 11:03:27.553722: E tensorflow/compiler/xla/stream_executor/cuda/cuda_fft.cc:609] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+2025-04-16 11:03:27.553770: E tensorflow/compiler/xla/stream_executor/cuda/cuda_blas.cc:1518] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2025-04-16 11:03:31.778037: E ./tensorflow/compiler/xla/stream_executor/stream_executor_internal.h:124] SetPriority unimplemented for this stream.
+/pasteur/appa/homes/mcampi/asr_env/lib/python3.11/site-packages/keras/src/engine/training.py:3079: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+WARNING:tensorflow:`period` argument is deprecated. Please use `save_freq` to specify the frequency in number of batches seen.
+Traceback (most recent call last):
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/retrain_asr_complete.py", line 214, in <module>
+    trainNonCausalNN(
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/srA2.py", line 370, in trainNonCausalNN
+    history = model.fit(
+              ^^^^^^^^^^
+  File "/pasteur/appa/homes/mcampi/asr_env/lib/python3.11/site-packages/keras/src/utils/traceback_utils.py", line 70, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/DataGenTimitTriBalanced.py", line 466, in __getitem__
+    X, Y, Y_tri, Y_groups = self._data_generation_hierarchical(batch_indices)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/DataGenTimitTriBalanced.py", line 488, in _data_generation_hierarchical
+    X, Y_cat, Y_tri_cat = self._data_generation_tri(list_idx_temp)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/DataGenTimitTriBalanced.py", line 415, in _data_generation_tri
+    X[i,] = self.X[ID_int-self.num_time_steps+1:ID_int+1, ].reshape(self.out_dim_nobatch)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: cannot reshape array of size 13420 into shape (305,40)
+Traceback (most recent call last):
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/retrain_asr_complete.py", line 270, in <module>
+    raise e
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/retrain_asr_complete.py", line 214, in <module>
+    trainNonCausalNN(
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/srA2.py", line 370, in trainNonCausalNN
+    history = model.fit(
+              ^^^^^^^^^^
+  File "/pasteur/appa/homes/mcampi/asr_env/lib/python3.11/site-packages/keras/src/utils/traceback_utils.py", line 70, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/DataGenTimitTriBalanced.py", line 466, in __getitem__
+    X, Y, Y_tri, Y_groups = self._data_generation_hierarchical(batch_indices)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/DataGenTimitTriBalanced.py", line 488, in _data_generation_hierarchical
+    X, Y_cat, Y_tri_cat = self._data_generation_tri(list_idx_temp)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pasteur/appa/homes/mcampi/ASR_ANSD/ASR/DataGenTimitTriBalanced.py", line 415, in _data_generation_tri
+    X[i,] = self.X[ID_int-self.num_time_steps+1:ID_int+1, ].reshape(self.out_dim_nobatch)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: cannot reshape array of size 13420 into shape (305,40)

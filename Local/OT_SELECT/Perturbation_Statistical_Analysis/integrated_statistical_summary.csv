@@ -1,0 +1,7 @@
+Question,Formant,F_value,P_value,Significant
+Category × Perturbation Interaction,F1,6.681368749825691,1.7105785671566704e-19,True
+Category × Perturbation Interaction,F2,7.167689275037335,5.0274868924054626e-21,True
+Category × Perturbation Interaction,F3,7.5125558199543025,4.3377071554627935e-22,True
+Perturbation Type Main Effect,F1,12.900109022475634,6.742406343043136e-08,True
+Perturbation Type Main Effect,F2,5.2966945966979,0.0014591444724187,True
+Perturbation Type Main Effect,F3,6.923221648888119,0.0001664385324945,True
