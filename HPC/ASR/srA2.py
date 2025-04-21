@@ -2,72 +2,45 @@ import numpy as np
 import tensorflow as tf
 import os
 from DataGenTimitTri import DataGeneratorTri
-# Import the new balanced hierarchical data generator
 from DataGenTimitTriBalanced import BalancedHierarchicalDataGenerator
 import time
 
-def focal_loss(gamma=2.0, alpha=None):
-    """
-    Focal loss for multi-class classification.
-    
-    Args:
-        gamma: Focusing parameter. Higher gamma means more focus on hard examples.
-        alpha: Optional weighting factor array. If provided, must be of size equal to the number of classes.
-    
-    Returns:
-        A loss function.
-    """
-    # Store alpha as a tensor outside the inner function to avoid scoping issues
-    alpha_tensor = None
-    if alpha is not None:
-        alpha_tensor = tf.constant(alpha, dtype=tf.float32)
-    
-    def loss_fn(y_true, y_pred):
-        # Clip prediction values to avoid log(0) errors
-        epsilon = 1e-7
-        y_pred = tf.clip_by_value(y_pred, epsilon, 1.0 - epsilon)
-        
-        # Calculate cross entropy
-        cross_entropy = -y_true * tf.math.log(y_pred)
-        
-        # Calculate focal weight - apply more weight to hard examples
-        if gamma > 0:
-            focal_weight = tf.pow(1 - y_pred, gamma)
-            cross_entropy = focal_weight * cross_entropy
-        
-        # Apply alpha weighting if provided
-        if alpha_tensor is not None:
-            alpha_factor = y_true * tf.reshape(alpha_tensor, [1, -1])
-            cross_entropy = alpha_factor * cross_entropy
-        
-        # Sum over all classes
-        loss = tf.reduce_sum(cross_entropy, axis=-1)
-        
-        # Return mean across samples
-        return tf.reduce_mean(loss)
-    
-    return loss_fn
-
-def weighted_categorical_crossentropy(weights):
-    """Weighted categorical crossentropy loss function (original implementation kept for reference)."""
+def weighted_categorical_crossentropy_40(weights):
+    """Weighted categorical crossentropy for 40-class outputs."""
     weights = tf.constant(weights, dtype=tf.float32)
 
     def loss_fn(y_true, y_pred):
-        # Calculate sample weights based on class weights
+        # Calculate sample weights using the weights
         sample_weights = tf.reduce_sum(y_true * tf.reshape(weights, [1, -1]), axis=-1)
         
         # Standard categorical cross entropy
         ce_loss = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
         
-        # Apply weights and return mean
+        # Apply weights
         return tf.reduce_mean(ce_loss * sample_weights)
     
     return loss_fn
 
-def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
-                    epochs_to_save=1, epochs_total=60, batch_size=1024,
-                    load_model=None, validation_positions_path=None,
-                    balanced_positions_path=None,  # NEW parameter for balanced positions
+def weighted_categorical_crossentropy_5(weights):
+    """Weighted categorical crossentropy for 5-class phoneme groups."""
+    # Create weights for 5 classes
+    group_weights = tf.ones(5, dtype=tf.float32)  # Equal weights for groups
+    
+    def loss_fn(y_true, y_pred):
+        # Calculate sample weights using reshaped group weights
+        sample_weights = tf.reduce_sum(y_true * tf.reshape(group_weights, [1, -1]), axis=-1)
+        
+        # Standard categorical cross entropy
+        ce_loss = tf.keras.losses.categorical_crossentropy(y_true, y_pred)
+        
+        # Apply weights
+        return tf.reduce_mean(ce_loss * sample_weights)
+    
+    return loss_fn
+
+def trainNonCausalNN(filename_X, filename_Y, file_identifier_out, 
+                    epochs_to_save=1, epochs_total=60, batch_size=1024, 
+                    load_model=None, validation_positions_path=None, balanced_positions_path=None,
                     reduce_factor=1, validation_split=0.2, patience=5):
     """
     Train the non-causal neural network (bidirectional GRU with attention)
@@ -91,7 +64,7 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
     validation_positions_path : str
         Path to pre-computed validation positions
     balanced_positions_path : str
-        Path to balanced position indices (NEW)
+        Path to pre-computed balanced training positions
     reduce_factor : int
         Reduction factor for dataset size
     validation_split : float
@@ -113,29 +86,33 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
     n_features = 40  # Number of phoneme probabilities from srA1
     pool_size = 5  # For 10ms frames
     
-    # Get validation positions
+    # Split data into training and validation
     if validation_positions_path is not None and os.path.exists(validation_positions_path):
         print(f"Using pre-computed validation positions from {validation_positions_path}")
         val_positions = np.load(validation_positions_path)
+        
+        # Use balanced positions if provided and path exists, otherwise use standard sampling
+        if balanced_positions_path is not None and os.path.exists(balanced_positions_path):
+            print(f"Using balanced positions from {balanced_positions_path}")
+            train_positions = np.load(balanced_positions_path)
+            print(f"Using {len(train_positions)} balanced training positions")
+        else:
+            # Generate training positions (all positions not in validation set)
+            print("Not using balanced positions - focusing on standard distribution")
+            all_positions = np.arange(len(y))
+            train_positions = np.setdiff1d(all_positions, val_positions)
+            
+            # Take a subset of the training data if reduce_factor > 1
+            if reduce_factor > 1:
+                print(f"Applying reduce factor of {reduce_factor}")
+                train_positions = train_positions[::reduce_factor]
     else:
         # Split positions randomly if no validation file provided
         indices = np.arange(len(y))
         np.random.shuffle(indices)
         split = int(len(indices) * (1 - validation_split))
+        train_positions = indices[:split]
         val_positions = indices[split:]
-        
-    # NEW: Use balanced positions if provided
-    if balanced_positions_path is not None and os.path.exists(balanced_positions_path):
-        print(f"Using balanced positions from {balanced_positions_path}")
-        train_positions = np.load(balanced_positions_path)
-        # Take a subset of the training data if reduce_factor > 1
-        if reduce_factor > 1:
-            train_positions = train_positions[::reduce_factor]
-        print(f"Using {len(train_positions)} balanced training positions")
-    else:
-        # Generate training positions (all positions not in validation set)
-        all_positions = np.arange(len(y))
-        train_positions = np.setdiff1d(all_positions, val_positions)
         
         # Take a subset of the training data if reduce_factor > 1
         if reduce_factor > 1:
@@ -143,7 +120,7 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
     
     print(f"Data split: {len(train_positions)} training samples, {len(val_positions)} validation samples")
     
-    # Build the model with hierarchical classification approach
+    # Build the model
     with tf.device('/cpu:0'):  # Build on CPU to avoid OOM on GPU
         # Input layer
         input_layer = tf.keras.layers.Input(shape=(time_window, n_features), name="input")
@@ -155,7 +132,7 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
         gru1_input = x  # For residual connection
         
         x = tf.keras.layers.Bidirectional(
-            tf.keras.layers.GRU(256, return_sequences=True),
+            tf.keras.layers.GRU(256, return_sequences=True),  # Increased from 128 to 256
             name="gru1"
         )(x)
         x = tf.keras.layers.Dropout(0.2)(x)  # Add dropout for regularization
@@ -163,15 +140,15 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
         # Residual connection if shapes match (not applied in first layer due to pooling)
         
         x = tf.keras.layers.Bidirectional(
-            tf.keras.layers.GRU(256),
+            tf.keras.layers.GRU(256),  # Increased from 128 to 256
             name="gru2"
         )(x)
         x = tf.keras.layers.Dropout(0.2)(x)  # Add dropout for regularization
         
         # Add self-attention mechanism with increased dimensions
-        query = tf.keras.layers.Dense(512, name="attention_query")(x)
-        key = tf.keras.layers.Dense(512, name="attention_key")(x)
-        value = tf.keras.layers.Dense(512, name="attention_value")(x)
+        query = tf.keras.layers.Dense(512, name="attention_query")(x)  # Increased from 256 to 512
+        key = tf.keras.layers.Dense(512, name="attention_key")(x)      # Increased from 256 to 512
+        value = tf.keras.layers.Dense(512, name="attention_value")(x)  # Increased from 256 to 512
         
         # Expand dimensions for attention calculation
         x_expanded = tf.expand_dims(x, axis=1)
@@ -190,18 +167,16 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
         x = x + context_vector
         x = tf.keras.layers.LayerNormalization(name="attention_layer_norm")(x)
         
-        # New: Add phoneme category classifier first (hierarchical approach)
-        # Group the 40 phoneme classes into fewer categories (e.g., vowels, stops, fricatives, etc.)
-        num_phoneme_groups = 5  # Example: 5 major phoneme categories
-        phoneme_group = tf.keras.layers.Dense(num_phoneme_groups, activation='softmax', name='phoneme_group')(x)
+        # Phoneme group classification (high-level categories)
+        phoneme_group = tf.keras.layers.Dense(5, activation='softmax', name='phoneme_group')(x)
         
-        # Create a feature representation enriched with phoneme group information
-        x_with_group = tf.keras.layers.Concatenate()([x, phoneme_group])
+        # Concatenate phoneme group predictions with attention output
+        x = tf.keras.layers.Concatenate()([x, phoneme_group])
         
         # Three output heads for predicting previous, current, and next phoneme
-        output_prev = tf.keras.layers.Dense(n_features, activation='softmax', name='out_prev2')(x_with_group)
-        output_now = tf.keras.layers.Dense(n_features, activation='softmax', name='out_now2')(x_with_group)
-        output_next = tf.keras.layers.Dense(n_features, activation='softmax', name='out_next2')(x_with_group)
+        output_prev = tf.keras.layers.Dense(n_features, activation='softmax', name='out_prev2')(x)
+        output_now = tf.keras.layers.Dense(n_features, activation='softmax', name='out_now2')(x)
+        output_next = tf.keras.layers.Dense(n_features, activation='softmax', name='out_next2')(x)
         
         # Create model
         model = tf.keras.Model(inputs=input_layer, outputs=[phoneme_group, output_prev, output_now, output_next])
@@ -218,45 +193,33 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
         except:
             print("Error loading model weights, starting from scratch")
     
-    # Calculate class frequencies and weights for focal loss
-    class_frequencies = np.bincount(y.astype(np.int32), minlength=n_features)
-    total_samples = len(y)
+    # Calculate class frequencies and weights for the loss function
+    class_frequencies = np.bincount(np.array(y, dtype=np.int32), minlength=n_features)
+    print(f"Class frequencies: {class_frequencies}")
     
-    # Extremely aggressive alpha to compensate for the 99%/1% imbalance
-    alpha = np.ones(n_features)
-    for i in range(len(class_frequencies)):
-        if i < len(alpha) and class_frequencies[i] > 0:
-            # Inverse frequency with heavy smoothing
-            alpha[i] = (1 - (class_frequencies[i] / total_samples)) ** 0.5
+    # Calculate alpha weights for focal loss (inverse frequency)
+    alpha_weights = np.ones(n_features)
+    total_samples = np.sum(class_frequencies)
     
-    # Normalize alpha
-    alpha = alpha / np.mean(alpha)
+    for i in range(n_features):
+        if class_frequencies[i] > 0:
+            # Less aggressive weighting to focus more on common phonemes
+            alpha_weights[i] = 1.0 - 0.3 * np.sqrt(class_frequencies[i] / total_samples)
     
-    print("Class frequencies:", class_frequencies)
-    print("Alpha weights for focal loss:", alpha)
+    # Normalize weights to have mean of 1.0
+    alpha_weights = alpha_weights / np.mean(alpha_weights)
+    print(f"Alpha weights for focal loss: {alpha_weights}")
     
-    # Define initial learning rate
-    initial_learning_rate = 0.001
-    
-    # Compile model with optimizer, focal loss functions, and metrics
-    optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=initial_learning_rate)
-    
-    # Define phoneme group weights - assume uniform weighting
-    group_weights = np.ones(num_phoneme_groups) / num_phoneme_groups
+    # Compile model with optimizer, loss functions, and metrics
+    optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=0.001)
     
     model.compile(
         optimizer=optimizer,
         loss={
-            'phoneme_group': 'categorical_crossentropy',  # For phoneme group
-            'out_prev2': focal_loss(gamma=2.0, alpha=alpha),
-            'out_now2': focal_loss(gamma=2.0, alpha=alpha),
-            'out_next2': focal_loss(gamma=2.0, alpha=alpha)
-        },
-        loss_weights={
-            'phoneme_group': 0.2,  # Lower weight for group classification
-            'out_prev2': 1.0,
-            'out_now2': 1.0,
-            'out_next2': 1.0
+            'phoneme_group': weighted_categorical_crossentropy_5(alpha_weights),
+            'out_prev2': weighted_categorical_crossentropy_40(alpha_weights),
+            'out_now2': weighted_categorical_crossentropy_40(alpha_weights),
+            'out_next2': weighted_categorical_crossentropy_40(alpha_weights)
         },
         metrics={
             'phoneme_group': 'categorical_accuracy',
@@ -292,74 +255,32 @@ def trainNonCausalNN(filename_X, filename_Y, file_identifier_out,
     # Create data generators
     print("Creating data generators...")
     
+    # Always use BalancedHierarchicalDataGenerator (modified approach)
+    if balanced_positions_path is not None and os.path.exists(balanced_positions_path):
+        print("Using balanced batch sampling with hierarchical data generator")
+    else:
+        print("Using hierarchical data generator with standard distribution (unbalanced)")
+        
     # Define output dimensions for the DataGeneratorTri
     out_dim = (batch_size, time_window, n_features)
     
-    # Create custom y_group for phoneme groups (simplified mapping example)
-    def create_phoneme_groups(y_data):
-        # Simple example mapping:
-        # Group 0: classes 0-7
-        # Group 1: classes 8-15
-        # Group 2: classes 16-23
-        # Group 3: classes 24-31
-        # Group 4: classes 32-39
-        groups = np.zeros((len(y_data), num_phoneme_groups))
-        for i, label in enumerate(y_data):
-            group_idx = min(int(label) // 8, num_phoneme_groups - 1)
-            groups[i, group_idx] = 1
-        return groups
-    
-    # Get group labels
-    y_groups = create_phoneme_groups(y)
-    
-    # Create generators with the correct parameters
-    # Comment out original hierarchical data generator
-    """
-    class HierarchicalDataGenerator(DataGeneratorTri):
-        def **init**(self, idx, X, Y, Y_groups, out_dim=(64, 128, 2, 192), shuffle=True, reduce_factor=1, non_causal_steps=0):
-            super().__init__(idx, X, Y, out_dim, shuffle, reduce_factor, non_causal_steps)
-            self.Y_groups = Y_groups
-            
-        def **getitem**(self, index):
-            X, [Y1, Y2, Y3] = super().__getitem__(index)
-            
-            # Get phoneme group labels for this batch
-            group_indices = [self.idx[k] for k in self.indexes[index*self.batch_size:(index+1)*self.batch_size]]
-            batch_groups = np.zeros((len(group_indices), num_phoneme_groups))
-            for i, idx in enumerate(group_indices):
-                target_idx = min(idx - self.non_causal_steps, len(self.Y_groups) - 1)
-                target_idx = max(0, target_idx)  # Ensure index is not negative
-                if target_idx < len(self.Y_groups):
-                    batch_groups[i] = self.Y_groups[target_idx]
-            
-            return X, [batch_groups, Y1, Y2, Y3]
-    """
-    
-    # Use balanced hierarchical data generator instead
-    print("Using balanced batch sampling with hierarchical data generator")
-    
-    # Create generators with balanced batching
-    # FIX: Remove the out_dim positional argument and keep only the keyword argument
+    # Create generators with the correct parameters for hierarchical classification
     train_generator = BalancedHierarchicalDataGenerator(
         train_positions, X, y, 
+        out_dim=out_dim,
         shuffle=True,
         reduce_factor=1,
         non_causal_steps=non_causal_steps,
-        out_dim=out_dim,
-        Y_tri=None,
-        Y_weights=None,
-        num_groups=num_phoneme_groups
+        num_groups=5  # Number of phoneme groups
     )
     
     val_generator = BalancedHierarchicalDataGenerator(
         val_positions, X, y, 
+        out_dim=out_dim,
         shuffle=False,
         reduce_factor=1,
         non_causal_steps=non_causal_steps,
-        out_dim=out_dim,
-        Y_tri=None,
-        Y_weights=None,
-        num_groups=num_phoneme_groups
+        num_groups=5  # Number of phoneme groups
     )
     
     # Train the model

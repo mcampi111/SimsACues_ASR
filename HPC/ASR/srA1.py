@@ -25,11 +25,9 @@ def trainCausalNN(filename_X='L_scaled.npy', filename_Y='Phonemes39consecutive.n
     Y = np.load(filename_Y)
     idx = np.load(filename_idx)
     
-    # Determine max class ID from the data
-    unique_classes = np.unique(Y).astype(int)
-    max_class_id = max(unique_classes) if len(unique_classes) > 0 else 39
-    num_classes = max_class_id + 1  # Classes from 0 to max_class_id
-    print(f"Setting num_classes to {num_classes} based on max class ID {max_class_id}")
+    # FIX: Always use fixed number of classes
+    num_classes = 40  # Fixed number of phoneme classes
+    print(f"Using fixed num_classes = {num_classes}")
     
     # Disable class weights to avoid TensorFlow GatherV2 error with high-valued class IDs
     print("Disabling class weights - using balanced data generator for class balancing instead")
@@ -54,7 +52,7 @@ def trainCausalNN(filename_X='L_scaled.npy', filename_Y='Phonemes39consecutive.n
     x = tf.keras.layers.GRU(64, return_sequences=True)(inp)
     x = tf.keras.layers.GRU(64)(x)
     
-    # Output layer - MODIFIED to support variable number of classes
+    # Output layer - MODIFIED to use fixed number of classes
     out = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
     
     model = tf.keras.Model(inputs=inp, outputs=out)

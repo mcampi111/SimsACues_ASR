@@ -1,9 +1,11 @@
 """
 DataGenTimitTriBalanced.py - Enhanced data generator for TIMIT dataset with balanced batch sampling
 
-This version has improved efficiency and detailed progress reporting to help diagnose performance issues.
-It fixes the issue with float class indices and numpy arrays as dictionary keys.
-It improves handling of rare phoneme classes by increasing their representation in batches.
+This version combines the best aspects of both implementations:
+1. Linguistic-based phoneme grouping from the successful version
+2. Three-step batch creation strategy with rare class focus + natural distribution
+3. Improved error handling and window processing
+4. Moderate weighting to prevent extreme oversampling while still addressing class imbalance
 """
 
 import numpy as np
@@ -11,6 +13,30 @@ import tensorflow as tf
 import time
 from collections import defaultdict
 import sys
+
+# TIMIT Phoneme Groups based on phonetic characteristics
+PHONEME_GROUPS = {
+    # Group 0: Vowels and diphthongs
+    "vowels": [0, 13, 14, 16, 17, 18, 19, 20, 21, 26, 32, 33, 35],
+    
+    # Group 1: Stops/Plosives
+    "stops": [1, 2, 3, 4, 5, 6, 7, 11],
+    
+    # Group 2: Fricatives 
+    "fricatives": [8, 9, 10, 12, 15, 22, 23, 24, 25],
+    
+    # Group 3: Nasals and semivowels
+    "nasals_semivowels": [27, 28, 29, 30, 31, 34, 36, 37],
+    
+    # Group 4: Silence and others
+    "silence_other": [38, 39]
+}
+
+# Create a lookup dict for efficiency
+PHONEME_TO_GROUP = {}
+for group_idx, (group_name, phonemes) in enumerate(PHONEME_GROUPS.items()):
+    for phoneme in phonemes:
+        PHONEME_TO_GROUP[phoneme] = group_idx
 
 def add_cognitive_noise(neurogram, snr_db=10):
     """Add pink noise to neurogram at specified SNR level"""
@@ -48,7 +74,7 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
             Y: target phoneme labels
             out_dim: output dimensions (batch_size, time_steps, features)
             shuffle: whether to shuffle data between epochs
-            reduce_factor: factor to reduce dataset size
+            reduce_factor: factor to reduce dataset size (set to 1 to process ALL data)
             non_causal_steps: number of steps to look ahead (0 for causal model)
         """
         print("Initializing BalancedDataGenerator...")
@@ -62,12 +88,7 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
         for i in range(1, len(out_dim)-1):
             self.num_time_steps *= out_dim[i]
             
-        # Determine max class ID from the data to set num_classes
-        unique_classes = np.unique(Y).astype(int)
-        self.max_class_id = max(unique_classes) if len(unique_classes) > 0 else 39
-        self.num_classes = self.max_class_id + 1  # Classes from 0 to max_class_id
-        print(f"Setting num_classes to {self.num_classes} based on max class ID {self.max_class_id}")
-            
+        self.num_classes = 40  # Fixed number of phoneme classes
         self.shuffle = shuffle
         
         # Convert idx to numpy array and ensure it's 1D
@@ -78,10 +99,18 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
         
         # Filter positions that have enough context
         print(f"Filtering {len(idx)} indices for sufficient context...")
-        self.idx = np.array([int(pos) for pos in idx if pos >= self.num_time_steps - 1], dtype=np.int64)
+        # IMPORTANT FIX: Make sure to check against both X and Y lengths to prevent index errors
+        self.idx = np.array([
+            int(pos) for pos in idx 
+            if pos >= self.num_time_steps - 1 and pos < len(X) and pos - non_causal_steps < len(Y)
+        ], dtype=np.int64)
+        
+        if len(self.idx) < len(idx):
+            print(f"Filtered out {len(idx) - len(self.idx)} indices that didn't have enough context")
         
         self.non_causal_steps = non_causal_steps
-        self.reduce_factor = reduce_factor
+        # IMPORTANT FIX: Set reduce_factor to 1 to process ALL data
+        self.reduce_factor = 1
         
         # Group indices by class
         self.class_indices = self._group_by_class()
@@ -94,14 +123,17 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
 
     def _calculate_class_weights(self):
         """
-        Calculate weights for each class based on inverse frequency
+        Calculate weights for each class based on inverse frequency with moderation
         """
         self.class_weights = {}
         total_samples = sum(len(indices) for indices in self.class_indices.values())
         
         for cls, indices in self.class_indices.items():
-            # Weight is inversely proportional to class frequency
-            self.class_weights[cls] = total_samples / (len(indices) * len(self.class_indices))
+            # Weight is inversely proportional to class frequency but capped for rare classes
+            # IMPORTANT CHANGE: Use more modest weighting to avoid extreme oversampling
+            weight = total_samples / (len(indices) * len(self.class_indices))
+            # Cap weights to prevent extreme oversampling of rare classes
+            self.class_weights[cls] = min(3.0, weight)
             
         # Define thresholds for rare classes
         class_sizes = {cls: len(indices) for cls, indices in self.class_indices.items()}
@@ -114,11 +146,14 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
         print(f"Rare classes: {rare_classes}")
         print(f"Number of rare classes: {len(rare_classes)} out of {len(self.class_indices)}")
 
-    def _group_by_class(self):
+    def _group_by_class(self, verbose=False):
         """
         Group position indices by their corresponding phoneme class.
         Uses a two-pass approach for efficiency and handles float and array class labels.
         
+        Args:
+            verbose: whether to print processing chunk messages
+            
         Returns:
             Dictionary mapping class labels to lists of position indices
         """
@@ -138,7 +173,8 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
             end_idx = min((chunk_idx + 1) * chunk_size, len(self.idx))
             chunk = self.idx[start_idx:end_idx]
             
-            print(f"Processing chunk {chunk_idx+1}/{num_chunks} ({start_idx}-{end_idx})...")
+            if verbose:
+                print(f"Processing chunk {chunk_idx+1}/{num_chunks} ({start_idx}-{end_idx})...")
             
             for pos in chunk:
                 # Check bounds to prevent index errors
@@ -168,21 +204,14 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
 
     def __len__(self):
         """Return the number of batches per epoch"""
-        # Calculate how many complete batches we can create
-        # We want to ensure we have at least one sample from each available class in each batch
-        num_available_classes = len(self.class_indices)
-        
-        if num_available_classes == 0:
-            return 0
-            
+        # IMPORTANT CHANGE: Process much more data to approach 7.7M samples
         total_samples = sum(len(indices) for indices in self.class_indices.values())
         
-        # Determine number of batches based on total samples and batch size
-        # We need at least one sample from each class in each batch
-        num_batches = max(1, total_samples // self.batch_size)
+        # We want at least 30,000 batches (similar to original 59.8% model)
+        desired_batches = 30000
         
-        # Adjust for reduce_factor if needed
-        return max(1, int(num_batches // self.reduce_factor))
+        # But make sure we don't exceed what we have
+        return min(desired_batches, max(1, total_samples // self.batch_size))
 
     def __getitem__(self, index):
         """Generate one batch of data with balanced class distribution"""
@@ -200,7 +229,7 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
 
     def _create_balanced_batch(self, batch_index):
         """
-        Create a balanced batch ensuring better representation of rare classes.
+        Create a balanced batch with smarter rare class handling
         
         Args:
             batch_index: Index of the batch to create
@@ -213,101 +242,82 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
         
         if not available_classes:
             raise ValueError("No classes available for batch creation")
-            
-        # IMPROVEMENT 1: Give more representation to rare classes
-        for cls in available_classes:
+        
+        # Step 1: First include at least one sample from each available rare class
+        rare_classes = [cls for cls in available_classes 
+                      if len(self.class_indices[cls]) < self.rare_threshold]
+        
+        for cls in rare_classes:
             if self.class_indices[cls]:  # If there are samples for this class
                 cls_indices = self.class_indices[cls]
+                # Take one sample from this rare class
+                idx_in_class = (batch_index * 11) % len(cls_indices)  # Prime number for better coverage
+                batch_indices.append(cls_indices[idx_in_class])
                 
-                # For rare classes, include more samples per batch
-                if len(cls_indices) < self.rare_threshold:  # Threshold for "rare"
-                    # Take more samples for rare classes
-                    samples_to_use = min(5, len(cls_indices))  # Take up to 5 samples per rare class
-                    for j in range(samples_to_use):
-                        # Use different indices for each batch and sample
-                        idx_in_class = (batch_index * 7 + j) % len(cls_indices)
-                        batch_indices.append(cls_indices[idx_in_class])
-                else:
-                    # For common classes, just take one sample
-                    idx_in_class = (batch_index * 7) % len(cls_indices)
+                # For extremely rare classes (fewer than 50 samples), 
+                # take an additional sample with 50% probability
+                if len(cls_indices) < 50 and np.random.random() < 0.5:
+                    idx_in_class = (idx_in_class + 7) % len(cls_indices)  # Another prime offset
                     batch_indices.append(cls_indices[idx_in_class])
-                
-                # Stop if batch is full
-                if len(batch_indices) >= self.batch_size:
-                    break
         
-        # If batch is not full, add more samples with weighted selection
-        if len(batch_indices) < self.batch_size:
-            # IMPROVEMENT 2: Create flat arrays for weighted sampling that are guaranteed to be 1D
-            all_indices = []
-            all_weights = []
+        # Step 2: Fill 70% of the remainder with balanced sampling across all classes
+        target_balanced = int(0.7 * (self.batch_size - len(batch_indices)))
+        if target_balanced > 0:
+            # Sample remaining slots from all classes with moderate weighting
+            all_classes = list(available_classes)  # Copy to avoid modification during iteration
+            np.random.shuffle(all_classes)  # Shuffle to avoid always starting with the same classes
             
-            # Build flat lists of indices and their corresponding weights
-            for cls in available_classes:
-                for idx in self.class_indices[cls]:
-                    if idx not in batch_indices:  # Avoid duplicates
-                        all_indices.append(idx)
-                        all_weights.append(self.class_weights[cls])
-            
-            # If we have indices to sample from
-            if all_indices:
-                # Convert to NumPy arrays
-                all_indices = np.array(all_indices, dtype=np.int64)
-                all_weights = np.array(all_weights, dtype=np.float32)
-                
-                # Normalize weights
-                if np.sum(all_weights) > 0:
-                    all_weights = all_weights / np.sum(all_weights)
+            for cls in all_classes:
+                if len(batch_indices) >= len(batch_indices) + target_balanced:
+                    break  # Stop if we've filled our balanced quota
                     
-                    # Use weighted sampling for remaining indices
-                    num_remaining = self.batch_size - len(batch_indices)
-                    if num_remaining > 0:
-                        try:
-                            # Weighted random choice
-                            chosen_indices = np.random.choice(
-                                all_indices,
-                                size=min(num_remaining, len(all_indices)),
-                                replace=False,
-                                p=all_weights
-                            )
-                            batch_indices.extend(chosen_indices.tolist())
-                        except Exception as e:
-                            print(f"Weighted sampling failed: {e}")
-                            print(f"Falling back to unweighted sampling")
-                            # Fallback to unweighted sampling
-                            chosen_indices = np.random.choice(
-                                all_indices,
-                                size=min(num_remaining, len(all_indices)),
-                                replace=False
-                            )
-                            batch_indices.extend(chosen_indices.tolist())
-                else:
-                    # Fallback to unweighted sampling if weights sum to zero
-                    num_remaining = self.batch_size - len(batch_indices)
-                    chosen_indices = np.random.choice(
-                        all_indices,
-                        size=min(num_remaining, len(all_indices)),
-                        replace=False
-                    )
-                    batch_indices.extend(chosen_indices.tolist())
+                cls_indices = self.class_indices[cls]
+                if not cls_indices:
+                    continue
+                    
+                # Calculate how many samples to take based on moderate weighting
+                # More samples from common classes, but still some balance
+                class_weight = min(2.0, np.sqrt(self.rare_threshold / max(10, len(cls_indices))))
+                samples_to_use = min(
+                    int(max(1, class_weight * 3)),  # At least 1, at most 6 samples per class
+                    len(cls_indices),
+                    target_balanced - (len(batch_indices) - len(batch_indices))  # Don't exceed our target
+                )
+                
+                # Take the calculated number of samples
+                for j in range(samples_to_use):
+                    idx_in_class = (batch_index * 13 + j * 7) % len(cls_indices)  # More prime magic
+                    batch_indices.append(cls_indices[idx_in_class])
         
-        # Ensure batch size is correct
+        # Step 3: Fill the rest (30%) with natural distribution 
+        # This helps the model learn the true data distribution
+        remaining = self.batch_size - len(batch_indices)
+        if remaining > 0:
+            # Flatten indices from all classes
+            all_indices = []
+            for cls in self.class_indices:
+                all_indices.extend(self.class_indices[cls])
+                
+            if all_indices:
+                # Sample randomly without replacement
+                chosen_indices = np.random.choice(
+                    all_indices, 
+                    size=min(remaining, len(all_indices)),
+                    replace=False
+                )
+                batch_indices.extend(chosen_indices.tolist())
+        
+        # Ensure we have batch_size samples
         if len(batch_indices) < self.batch_size:
-            # If we still don't have enough samples, repeat existing ones
+            # If we still don't have enough, repeat existing samples
             shortage = self.batch_size - len(batch_indices)
-            # Make sure batch_indices is not empty
             if batch_indices:
-                indices_to_repeat = np.array(batch_indices, dtype=np.int64)
+                indices_to_repeat = np.array(batch_indices)
                 batch_indices.extend(np.random.choice(indices_to_repeat, size=shortage).tolist())
             else:
-                # Fallback if we have no indices at all - use random values
-                print("Warning: No valid indices available for batch creation")
-                # Use first index if available, otherwise 0
-                if len(self.idx) > 0:
-                    batch_indices = [int(self.idx[0])] * self.batch_size 
-                else:
-                    batch_indices = [0] * self.batch_size
-            
+                # Fallback
+                batch_indices = [0] * self.batch_size
+        
         return batch_indices
 
     def _data_generation(self, list_idx_temp):
@@ -329,10 +339,26 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
             if hasattr(ID, 'item'):
                 ID_int = int(ID.item())  # Handle numpy scalars
                 
-            # Check bounds to prevent errors
-            if ID_int >= self.num_time_steps - 1 and ID_int < len(self.X):
-                # Get the input data window
-                X[i,] = self.X[ID_int-self.num_time_steps+1:ID_int+1, ].reshape(self.out_dim_nobatch)
+            # CRITICAL FIX: Better bounds checking to prevent "index out of bounds" errors
+            if (ID_int >= self.num_time_steps - 1 and 
+                ID_int < len(self.X) and 
+                ID_int - self.num_time_steps + 1 >= 0):
+                
+                try:
+                    # Get the input data window
+                    window = self.X[ID_int-self.num_time_steps+1:ID_int+1]
+                    # Check if window shape matches expected shape
+                    if window.shape[0] == self.out_dim_nobatch[0]:
+                        X[i,] = window.reshape(self.out_dim_nobatch)
+                    else:
+                        # Padding if window is smaller than expected
+                        print(f"Window size mismatch at ID {ID_int}, using padding")
+                        padded_window = np.zeros(self.out_dim_nobatch)
+                        padded_window[:window.shape[0]] = window
+                        X[i,] = padded_window
+                except Exception as e:
+                    print(f"Error processing window at ID {ID_int}: {e}")
+                    X[i,] = np.zeros(self.out_dim_nobatch)
                 
                 # Get the target class - use proper bounds checking
                 target_idx = min(ID_int-self.non_causal_steps, len(self.Y) - 1)
@@ -343,9 +369,6 @@ class BalancedDataGenerator(tf.keras.utils.Sequence):
                 # Use zeros as fallback
                 X[i,] = np.zeros(self.out_dim_nobatch)
                 Y[i] = 0
-        
-        # Clip Y values to be within valid range for one-hot encoding
-        Y = np.clip(Y, 0, self.num_classes-1)
         
         return X, tf.keras.utils.to_categorical(Y, num_classes=self.num_classes, dtype='float32')
 
@@ -409,10 +432,25 @@ class BalancedDataGeneratorTri(BalancedDataGenerator):
             if hasattr(ID, 'item'):
                 ID_int = int(ID.item())  # Handle numpy scalars
                 
-            # Check bounds to prevent errors
-            if ID_int >= self.num_time_steps - 1 and ID_int < len(self.X):
-                # Get the input data window
-                X[i,] = self.X[ID_int-self.num_time_steps+1:ID_int+1, ].reshape(self.out_dim_nobatch)
+            # IMPROVED BOUNDS CHECKING: Check all conditions
+            if (ID_int >= self.num_time_steps - 1 and 
+                ID_int < len(self.X) and 
+                ID_int - self.num_time_steps + 1 >= 0):
+                
+                try:
+                    # Get the input data window
+                    window = self.X[ID_int-self.num_time_steps+1:ID_int+1]
+                    # Check if window shape matches expected shape
+                    if window.shape[0] == self.out_dim_nobatch[0]:
+                        X[i,] = window.reshape(self.out_dim_nobatch)
+                    else:
+                        # Padding if window is smaller than expected
+                        padded_window = np.zeros(self.out_dim_nobatch)
+                        padded_window[:window.shape[0]] = window
+                        X[i,] = padded_window
+                except Exception as e:
+                    print(f"Error processing window at ID {ID_int}: {e}")
+                    X[i,] = np.zeros(self.out_dim_nobatch)
                 
                 # Get the target classes - use proper bounds checking
                 target_idx = min(ID_int-self.non_causal_steps, len(self.Y) - 1)
@@ -435,13 +473,20 @@ class BalancedDataGeneratorTri(BalancedDataGenerator):
                 Y[i] = 0
                 Y_tri[i] = 0
         
-        # Clip Y and Y_tri values to be within valid range
+        # Convert to categorical - Ensure values are valid for to_categorical
+        # FIX: Ensure all values are in valid range before conversion
+        # For Y_cat, ensure all values are in range 0-39
         Y = np.clip(Y, 0, self.num_classes-1)
-        Y_tri = np.clip(Y_tri, 0, self.num_classes-1)
+        Y_cat = tf.keras.utils.to_categorical(Y, num_classes=self.num_classes, dtype='float32')
+        
+        # For Y_tri, determine the number of tri-phoneme classes, default to regular num_classes
+        num_tri_classes = self.num_classes
+        if self.Y_tri is not None:
+            # Clip to ensure valid range
+            Y_tri = np.clip(Y_tri, 0, self.num_classes-1)
             
         # Create categorical with proper number of classes
-        Y_cat = tf.keras.utils.to_categorical(Y, num_classes=self.num_classes, dtype='float32')
-        Y_tri_cat = tf.keras.utils.to_categorical(Y_tri, num_classes=self.num_classes, dtype='float32')
+        Y_tri_cat = tf.keras.utils.to_categorical(Y_tri, num_classes=num_tri_classes, dtype='float32')
             
         return X, Y_cat, Y_tri_cat
 
@@ -491,18 +536,11 @@ class BalancedHierarchicalDataGenerator(BalancedDataGeneratorTri):
         Y = np.argmax(Y_cat, axis=1)
         Y_groups = np.zeros((self.batch_size, self.num_groups), dtype='float32')
         
-        # Assign each phoneme to its group based on index
+        # Assign each phoneme to its proper linguistic group using PHONEME_TO_GROUP
         for i in range(len(Y)):
-            # Convert to int to safely use as index and prevent float issues
             phoneme = int(Y[i])
-            # Handle original phonemes vs. group phonemes
-            if phoneme < 40:  # Original phoneme
-                # Calculate group index (e.g., for 5 groups with 40 phonemes: 0-7=0, 8-15=1, etc.)
-                group_idx = min(phoneme // (40 // self.num_groups), self.num_groups - 1)
-            else:  # This is a group phoneme (101-104)
-                # Assign to the last group by default
-                group_idx = self.num_groups - 1
-            
+            # Get group using the lookup table
+            group_idx = PHONEME_TO_GROUP.get(phoneme, 0)  # Default to group 0 if not found
             Y_groups[i, group_idx] = 1.0
             
         return X, Y_cat, Y_tri_cat, Y_groups
