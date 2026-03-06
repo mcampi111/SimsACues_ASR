@@ -1,8 +1,0 @@
-{
-    "sampling_frequency": 20000,
-    "ap_duration": 1,
-    "ap_type": "auditory_nerve",
-    "date_computed": "2025-04-07 16:51:46",
-    "neurogram_source": "/Users/mcampi/Desktop/To_Marta/ANSD_Study/code/code_all/SELECT_Neurograms_ANSD/TEST",
-    "perturbation_types_source": "/Users/mcampi/Desktop/To_Marta/ANSD_Study/code/code_all/perturbation_types.json"
-}

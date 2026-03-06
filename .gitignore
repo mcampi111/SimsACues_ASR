@@ -1,2 +1,43 @@
-Local/OT_SELECT/SELECT_F_vs_Neuro_Noise_Results/merged_data_noise.pkl
-Local/OT_SELECT/SELECT_F_vs_Neuro_Noise_Results/merged_data_noise.pkl
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.env/
+
+# Data files (too large for GitHub)
+*.npy
+*.mat
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+
+# Results and logs
+results/
+logs/
+*.log
+
+# MATLAB
+*.asv
+*.mex*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/

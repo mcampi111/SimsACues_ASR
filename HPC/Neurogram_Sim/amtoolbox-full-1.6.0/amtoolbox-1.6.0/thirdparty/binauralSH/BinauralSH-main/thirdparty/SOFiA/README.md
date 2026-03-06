@@ -1,1 +1,0 @@
-Functions to generate Gauss and Lebedev grids.

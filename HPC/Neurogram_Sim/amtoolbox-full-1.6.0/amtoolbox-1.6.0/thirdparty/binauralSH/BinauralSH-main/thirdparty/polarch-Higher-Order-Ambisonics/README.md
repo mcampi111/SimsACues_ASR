@@ -1,1 +1,0 @@
-This only includes the function getMaxREweights.m
