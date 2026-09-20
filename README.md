@@ -1,4 +1,4 @@
-# ASR_ANSD — Clean Codebase
+# Which phonetic contrasts recover information lost to aggregate speech scoring in auditory nerve disorders: a computational framework
 
 Code for: *"Which phonetic contrasts recover information lost to aggregate speech scoring in auditory nerve disorders: a computational framework"*
 
