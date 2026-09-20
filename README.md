@@ -1,7 +1,6 @@
 # ASR_ANSD — Clean Codebase
 
-Code for: *"Mechanism-Specific Speech Encoding Failures in Auditory Neuropathy:
-A Computational Phenotyping Framework"*
+Code for: *"Which phonetic contrasts recover information lost to aggregate speech scoring in auditory nerve disorders: a computational framework"*
 
 ## Project Structure
 
