@@ -2,6 +2,11 @@
 
 Code for: *"Which phonetic contrasts recover information lost to aggregate speech scoring in auditory nerve disorders: a computational framework"*
 
+> **Version used in the manuscript.** The exact code submitted with the paper is
+> preserved under the tag [`plos-submission`](https://github.com/mcampi111/SimsACues_ASR/tree/plos-submission).
+> The `main` branch has since been restructured into an installable, tested package;
+> the refactor does not change any result (see *Tests* below).
+
 ## Project Structure
 
 ```
