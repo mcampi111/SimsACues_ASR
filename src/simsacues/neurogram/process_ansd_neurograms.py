@@ -17,7 +17,8 @@ from scipy.io import loadmat, savemat
 import logging
 import argparse
 
-from perturbations import apply_random_perturbation, NEUROGRAM_SAMPLING_RATE
+from simsacues.neurogram.perturbations import apply_random_perturbation, NEUROGRAM_SAMPLING_RATE
+from simsacues.noise import add_cognitive_noise
 
 # Configure logging
 logging.basicConfig(
@@ -28,56 +29,6 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-
-
-def add_cognitive_noise(neurogram, snr_db=None):
-    """
-    Add pink (1/f) noise to neurogram at specified SNR level.
-
-    Paper (Section 2.3): "Cognitive noise was modeled as additive pink noise
-    at 5–15 dB SNR."
-
-    Parameters
-    ----------
-    neurogram : np.ndarray, shape (time_frames, freq_channels)
-        Input neurogram.
-    snr_db : float or None
-        Target SNR in dB. If None, sampled from U(5, 15).
-
-    Returns
-    -------
-    np.ndarray
-        Noisy neurogram.
-    """
-    if snr_db is None:
-        snr_db = np.random.uniform(5.0, 15.0)
-
-    # Generate proper 1/f (pink) noise via spectral shaping
-    num_time, num_freq = neurogram.shape
-    noise = np.random.randn(num_time, num_freq)
-
-    # Apply 1/f spectral profile along time axis
-    for f_ch in range(num_freq):
-        fft_noise = np.fft.rfft(noise[:, f_ch])
-        freqs = np.fft.rfftfreq(num_time)
-        # Avoid division by zero at DC
-        freqs[0] = 1.0
-        # 1/f amplitude spectrum (pink noise)
-        fft_noise *= 1.0 / np.sqrt(freqs)
-        noise[:, f_ch] = np.fft.irfft(fft_noise, n=num_time)
-
-    # Normalize noise to zero mean
-    noise -= np.mean(noise)
-
-    # Scale noise to achieve target SNR
-    signal_power = np.mean(neurogram ** 2)
-    noise_power = np.mean(noise ** 2)
-
-    if noise_power > 0 and signal_power > 0:
-        scaling = np.sqrt(signal_power / (noise_power * 10 ** (snr_db / 10)))
-        noise *= scaling
-
-    return neurogram + noise
 
 
 def process_neurograms(input_base, output_base, task_id, num_tasks,

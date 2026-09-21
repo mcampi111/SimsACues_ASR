@@ -23,23 +23,9 @@ import os
 import numpy as np
 import tensorflow as tf
 
-from data_generators import CausalDataGenerator
-from phoneme_categories import NUM_CATEGORIES
-
-
-def focal_loss(alpha=0.25, gamma=2.0):
-    """
-    Focal loss for class-imbalanced classification.
-
-    Paper: "Focal loss (γ = 2.0) was used to address class imbalance."
-    """
-    def loss_fn(y_true, y_pred):
-        y_pred = tf.clip_by_value(y_pred, 1e-7, 1.0 - 1e-7)
-        ce_loss = -tf.reduce_sum(y_true * tf.math.log(y_pred), axis=-1)
-        pt = tf.reduce_sum(y_true * y_pred, axis=-1)
-        focal_weight = alpha * tf.pow(1.0 - pt, gamma)
-        return tf.reduce_mean(focal_weight * ce_loss)
-    return loss_fn
+from simsacues.asr.data_generators import CausalDataGenerator
+from simsacues.phoneme_categories import NUM_CATEGORIES
+from simsacues.asr.losses import focal_loss
 
 
 def build_srA1(input_shape=(50, 150), num_classes=NUM_CATEGORIES):

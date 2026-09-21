@@ -22,7 +22,7 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 
-from phoneme_categories import CATEGORY_NAMES, PHONEME_TO_CATEGORY_NAME
+from simsacues.phoneme_categories import CATEGORY_NAMES, PHONEME_TO_CATEGORY_NAME
 
 
 EXPECTED_TIME_FRAMES = 50

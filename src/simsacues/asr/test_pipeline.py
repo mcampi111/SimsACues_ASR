@@ -26,9 +26,9 @@ import tensorflow as tf
 from collections import Counter
 from scipy import stats
 
-from srA1 import build_srA1
-from srA2 import build_srA2
-from phoneme_categories import CATEGORY_NAMES, NUM_CATEGORIES
+from simsacues.asr.srA1 import build_srA1
+from simsacues.asr.srA2 import build_srA2
+from simsacues.phoneme_categories import CATEGORY_NAMES, NUM_CATEGORIES
 
 
 # ============================================================================

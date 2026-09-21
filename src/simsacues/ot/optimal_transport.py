@@ -25,16 +25,39 @@ import json
 import numpy as np
 import ot
 from dtaidistance import dtw
-from collections import defaultdict
 from scipy import stats
 import pandas as pd
-import warnings
-warnings.filterwarnings('ignore')
 
 
 # ============================================================================
 # DISTANCE FUNCTIONS
 # ============================================================================
+
+def _weighted_persistence_map(neurogram, kernel, half_w):
+    """
+    Kernel-weighted squared deviation of each point's in-bounds neighbours
+    from the point itself.
+
+    Equivalent to looping over every (t, f) and summing
+    ``kernel * (window - centre) ** 2`` over the cropped window, but computed
+    by accumulating one shifted copy of the array per kernel offset. The
+    result is returned in the dtype of the input, as in the original loop,
+    which wrote each value into an array created with ``np.zeros_like``.
+    """
+    x = np.asarray(neurogram)
+    xf = x.astype(np.float64)
+    time_frames, freq_channels = x.shape
+    padded = np.pad(xf, half_w, mode='constant')
+    inside = np.pad(np.ones((time_frames, freq_channels)), half_w, mode='constant')
+    acc = np.zeros((time_frames, freq_channels), dtype=np.float64)
+    size = kernel.shape[0]
+    for i in range(size):
+        for j in range(size):
+            rows = slice(i, i + time_frames)
+            cols = slice(j, j + freq_channels)
+            acc += kernel[i, j] * inside[rows, cols] * (padded[rows, cols] - xf) ** 2
+    return acc.astype(x.dtype, copy=False)
+
 
 def wpew_neurogram_distance(neurogram1, neurogram2, neighborhood_size=5):
     """
@@ -75,34 +98,10 @@ def wpew_neurogram_distance(neurogram1, neurogram2, neighborhood_size=5):
     # Exponential weighting based on distance from center
     kernel = np.exp(-0.5 * (t_range[:, None] ** 2 + f_range[None, :] ** 2))
 
-    # Compute persistence maps for both neurograms
-    persistence1 = np.zeros_like(neurogram1)
-    persistence2 = np.zeros_like(neurogram2)
-
-    for t in range(time_frames):
-        for f in range(freq_channels):
-            # Neighborhood bounds
-            t_lo = max(0, t - half_w)
-            t_hi = min(time_frames, t + half_w + 1)
-            f_lo = max(0, f - half_w)
-            f_hi = min(freq_channels, f + half_w + 1)
-
-            # Extract neighborhoods
-            nb1 = neurogram1[t_lo:t_hi, f_lo:f_hi]
-            nb2 = neurogram2[t_lo:t_hi, f_lo:f_hi]
-
-            # Corresponding kernel region
-            k_t_lo = half_w - (t - t_lo)
-            k_t_hi = k_t_lo + (t_hi - t_lo)
-            k_f_lo = half_w - (f - f_lo)
-            k_f_hi = k_f_lo + (f_hi - f_lo)
-            w = kernel[k_t_lo:k_t_hi, k_f_lo:k_f_hi]
-
-            # Weighted persistence: deviation from center value
-            center1 = neurogram1[t, f]
-            center2 = neurogram2[t, f]
-            persistence1[t, f] = np.sum(w * (nb1 - center1) ** 2)
-            persistence2[t, f] = np.sum(w * (nb2 - center2) ** 2)
+    # Compute persistence maps for both neurograms (vectorised; see
+    # _weighted_persistence_map -- numerically identical to the point-by-point loop)
+    persistence1 = _weighted_persistence_map(neurogram1, kernel, half_w)
+    persistence2 = _weighted_persistence_map(neurogram2, kernel, half_w)
 
     # Normalize persistence maps to [0, 1]
     def normalize(arr):
@@ -292,6 +291,11 @@ def run_ot_analysis(merged_df, output_dir, category_col='Category',
     os.makedirs(output_dir, exist_ok=True)
 
     results = []
+    # Neurogram distance matrices keyed by the exact rows used. The neural
+    # matrix does not depend on the formant, so F1/F2/F3 share it whenever they
+    # retain the same tokens; if NaN trajectories drop different rows for
+    # different formants, the key differs and the matrix is recomputed.
+    neurogram_cache = {}
     categories = merged_df[category_col].dropna().unique()
     perturbation_types = merged_df['PerturbationType'].dropna().unique()
 
@@ -321,8 +325,9 @@ def run_ot_analysis(merged_df, output_dir, category_col='Category',
                 # Extract valid formant trajectories
                 formant_trajs = []
                 neurogram_list = []
+                row_ids = []
 
-                for _, row in subset.iterrows():
+                for row_id, row in subset.iterrows():
                     traj = row[formant_name]
                     neuro = row['Original']
 
@@ -332,6 +337,7 @@ def run_ot_analysis(merged_df, output_dir, category_col='Category',
                         if not np.all(np.isnan(traj_arr)):
                             formant_trajs.append(traj_arr)
                             neurogram_list.append(neuro)
+                            row_ids.append(row_id)
 
                 if len(formant_trajs) < 2:
                     continue
@@ -341,9 +347,13 @@ def run_ot_analysis(merged_df, output_dir, category_col='Category',
                     formant_dists = compute_pairwise_distances(
                         formant_trajs, dtw_formant_distance, max_samples_per_group
                     )
-                    neurogram_dists = compute_pairwise_distances(
-                        neurogram_list, wpew_neurogram_distance, max_samples_per_group
-                    )
+                    cache_key = (category, pert_type, tuple(row_ids))
+                    if cache_key not in neurogram_cache:
+                        neurogram_cache[cache_key] = compute_pairwise_distances(
+                            neurogram_list, wpew_neurogram_distance,
+                            max_samples_per_group
+                        )
+                    neurogram_dists = neurogram_cache[cache_key]
 
                     # Compute GW distance
                     gw_dist = compute_gw_distance(formant_dists, neurogram_dists)
@@ -444,7 +454,7 @@ def kruskal_wallis_gw_comparisons(results_df):
             result = {
                 'H_statistic': float(h_stat),
                 'p_value': float(p_value),
-                'significant_0.05': p_value < 0.05,
+                'significant_0.05': bool(p_value < 0.05),
                 'n_groups': len(groups),
                 'group_sizes': {k: len(v) for k, v in groups.items()},
                 'group_medians': {k: float(np.median(v)) for k, v in groups.items()},
@@ -471,7 +481,7 @@ def kruskal_wallis_gw_comparisons(results_df):
                         pairwise[pair_key] = {
                             'U_statistic': float(u_stat),
                             'p_value': float(u_p),
-                            'significant_0.05': u_p < 0.05,
+                            'significant_0.05': bool(u_p < 0.05),
                         }
 
             result['pairwise_mannwhitney'] = pairwise
