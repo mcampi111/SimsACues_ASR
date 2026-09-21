@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simsacues"
+version = "0.1.0"
+description = "Computational framework for phonetic-contrast analysis in auditory nerve disorders: neurogram simulation, two-stage ASR and optimal transport"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Marta Campi" }]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "pot>=0.9",
+    "dtaidistance>=2.3",
+]
+
+[project.optional-dependencies]
+asr = ["tensorflow>=2.12"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::UserWarning:ot.*"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["tests/reference"]

@@ -5,25 +5,52 @@ Code for: *"Which phonetic contrasts recover information lost to aggregate speec
 ## Project Structure
 
 ```
-ASR_ANSD/
-├── ASR/                          # Speech recognition pipeline
-│   ├── phoneme_categories.py     # TIMIT → 9-category mapping (Table A4)
-│   ├── data_generators.py        # Training data generators + cognitive noise
-│   ├── srA1.py                   # Stage 1: causal classifier (Section 2.6)
-│   ├── srA2.py                   # Stage 2: hierarchical classifier (Section 2.6)
-│   ├── test_pipeline.py          # Evaluation: matched, cross-pop, per-perturbation
-│   └── reverse_correlation.py    # Template/misclassification analysis (Section 2.8)
-│
-├── Neurogram_Sim/                # Neurogram generation and perturbation
-│   ├── generate_neurograms.m     # MATLAB: Zilany2014 AN model (Section 2.1)
-│   ├── perturbations.py          # Four ANSD perturbation types (Section 2.2)
-│   └── process_ansd_neurograms.py  # Batch processing pipeline for HPC
-│
-├── OT/                           # Optimal Transport analysis
-│   └── optimal_transport.py      # GW distance: DTW + wPEW (Section 2.5)
-│
+SimsACues_ASR/
+├── src/simsacues/
+│   ├── phoneme_categories.py        # TIMIT → 9-category mapping (Table A4)
+│   ├── noise.py                     # Cognitive (pink) noise (Section 2.3)
+│   ├── asr/                         # Speech recognition pipeline
+│   │   ├── data_generators.py       # Training data generators
+│   │   ├── losses.py                # Focal loss (shared by srA1/srA2)
+│   │   ├── srA1.py                  # Stage 1: causal classifier (Section 2.6)
+│   │   ├── srA2.py                  # Stage 2: hierarchical classifier (Section 2.6)
+│   │   ├── test_pipeline.py         # Evaluation: matched, cross-pop, per-perturbation
+│   │   └── reverse_correlation.py   # Template/misclassification analysis (Section 2.8)
+│   ├── neurogram/                   # Neurogram perturbation
+│   │   ├── perturbations.py         # Four ANSD perturbation types (Section 2.2)
+│   │   └── process_ansd_neurograms.py  # Batch processing pipeline for HPC
+│   └── ot/
+│       └── optimal_transport.py     # GW distance: DTW + wPEW (Section 2.5)
+├── matlab/
+│   └── generate_neurograms.m        # Zilany2014 AN model (Section 2.1)
+├── tests/                           # Test suite (see below)
+├── pyproject.toml
 └── README.md
 ```
+
+## Installation
+
+```bash
+git clone https://github.com/mcampi111/SimsACues_ASR.git
+cd SimsACues_ASR
+pip install -e ".[asr,dev]"      # drop "asr" if you do not need TensorFlow
+```
+
+The neurogram generator (`matlab/generate_neurograms.m`) requires MATLAB and
+AMToolbox v1.6.0; everything else is pure Python.
+
+## Tests
+
+```bash
+pytest
+```
+
+The optimal-transport module is tested end to end against the original
+implementation, kept unchanged in `tests/reference/`: the refactored code must
+produce the same GW distance table and the same statistical output. Perturbations
+and cognitive noise are tested for their documented behaviour (shape, target SNR,
+channel counts, truncation threshold, reproducibility under a fixed seed). The ASR
+tests build both models and are skipped when TensorFlow is not installed.
 
 ## Key Parameters (Paper ↔ Code Correspondence)
 
@@ -32,7 +59,7 @@ ASR_ANSD/
 - Fiber type: high-SR (100 sp/s), fiberType=3
 - Stimulus level: 65 dB SPL
 - Model sampling rate: 100 kHz → downsampled to 500 Hz (2 ms bins)
-- **Implemented in**: `Neurogram_Sim/generate_neurograms.m`
+- **Implemented in**: `matlab/generate_neurograms.m`
   - `generate_neurograms(task_id, num_tasks, true)` → noisy (WHAM! mixed)
   - `generate_neurograms(task_id, num_tasks, false)` → clean (silence condition)
 
@@ -43,13 +70,13 @@ ASR_ANSD/
 - **Truncation**: amplitude capped at α·max, α ~ U(0.3, 0.7)
 - Equal probability assignment (25% each)
 - **CRITICAL**: sampling_rate = 500 Hz (neurogram rate, not audio rate)
-- **Implemented in**: `Neurogram_Sim/perturbations.py`
+- **Implemented in**: `src/simsacues/neurogram/perturbations.py`
 
 ### Cognitive Noise (Section 2.3)
 - Pink (1/f) noise via spectral shaping
 - SNR: U(5, 15) dB
 - Applied during training data generation
-- **Implemented in**: `ASR/data_generators.py`
+- **Implemented in**: `src/simsacues/noise.py`
 
 ### ASR Architecture (Section 2.6, Appendix A)
 
@@ -93,20 +120,20 @@ ASR_ANSD/
   - 100 Sinkhorn iterations (tol 1e-8)
 - Distance matrices normalized by maximum values
 - N: 100–500 samples per category
-- **Implemented in**: `OT/optimal_transport.py`
+- **Implemented in**: `src/simsacues/ot/optimal_transport.py`
 
 ### Template Analysis (Section 2.8)
 - Confidence-weighted averaging: T = Σ P(c|X_i)·X_i / Σ P(c|X_i)
 - Stratified by: perturbation × predicted category × true phoneme
 - Difference templates: ΔT = T(wrong) − T(correct)
-- **Implemented in**: `ASR/reverse_correlation.py`
+- **Implemented in**: `src/simsacues/asr/reverse_correlation.py`
 
 ### Statistical Methods (Section 2.7)
 - Bootstrap 95% CIs: 10,000 resamples, percentile method
 - McNemar's test (with continuity correction) for category-specific srA1 vs srA2 differences
 - Kruskal-Wallis H test for GW distance comparisons across perturbation types
 - Post-hoc pairwise Mann-Whitney U tests
-- **Implemented in**: `ASR/test_pipeline.py` (McNemar's, bootstrap), `OT/optimal_transport.py` (Kruskal-Wallis)
+- **Implemented in**: `src/simsacues/asr/test_pipeline.py` (McNemar's, bootstrap), `src/simsacues/ot/optimal_transport.py` (Kruskal-Wallis)
 
 ## Dataset
 - TIMIT corpus (LDC93S1): 462 train / 168 test speakers
