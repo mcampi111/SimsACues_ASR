@@ -21,19 +21,24 @@ NEUROGRAM_SAMPLING_RATE = 500  # Hz — neurograms are downsampled to this rate
 
 def apply_uniform_jitter(neurogram, max_jitter_ms=None, sampling_rate=NEUROGRAM_SAMPLING_RATE):
     """
-    Uniform temporal jitter: δ_t ~ U(3, 10) ms applied identically across
-    all frequency channels at each time step.
+    Uniform temporal jitter, identical across all frequency channels.
 
-    For each time frame t, a single jitter value is drawn and applied to ALL
-    frequency channels simultaneously. This models synchronous dyssynchrony
-    (timing shifts that affect all fibers equally).
+    A maximum displacement ``max_jitter_ms`` (default drawn from U(3, 10) ms)
+    is converted to K = round(max_jitter_ms / sample period) samples. Each time
+    frame t is then moved forward by an independent integer shift drawn from
+    U{0, ..., K}, the same for every channel at that frame.
+
+    Frames whose shifted positions coincide overwrite one another (the later
+    frame wins), and positions that receive no frame remain zero. The output
+    therefore combines temporal desynchronisation with a loss of activity; on
+    synthetic input roughly a third of frames are left silent.
 
     Parameters
     ----------
     neurogram : np.ndarray, shape (time_frames, freq_channels)
         Input neurogram at 500 Hz sampling rate.
     max_jitter_ms : float or None
-        Maximum jitter in milliseconds. If None, sampled from U(3, 10).
+        Maximum displacement in milliseconds. If None, drawn from U(3, 10).
     sampling_rate : float
         Neurogram sampling rate in Hz. Default 500 Hz.
 
@@ -61,12 +66,12 @@ def apply_uniform_jitter(neurogram, max_jitter_ms=None, sampling_rate=NEUROGRAM_
 
 def apply_scattered_jitter(neurogram, max_jitter_ms=None, sampling_rate=NEUROGRAM_SAMPLING_RATE):
     """
-    Scattered temporal jitter: δ_{t,f} ~ U(3, 10) ms sampled independently
-    per frequency channel at each time step.
+    Scattered temporal jitter, drawn independently per frequency channel.
 
-    Unlike uniform jitter, each frequency channel receives its own independent
-    temporal shift. This models desynchronized neural firing across fiber
-    populations tuned to different frequencies.
+    Same procedure as :func:`apply_uniform_jitter`, but every (t, f) cell gets
+    its own shift from U{0, ..., K}. This desynchronises fibre populations tuned
+    to different frequencies. As with uniform jitter, colliding cells overwrite
+    one another and unfilled cells remain zero.
 
     NOTE: This is purely temporal jitter — no frequency-domain displacement.
 
@@ -75,7 +80,7 @@ def apply_scattered_jitter(neurogram, max_jitter_ms=None, sampling_rate=NEUROGRA
     neurogram : np.ndarray, shape (time_frames, freq_channels)
         Input neurogram at 500 Hz sampling rate.
     max_jitter_ms : float or None
-        Maximum jitter in milliseconds. If None, sampled from U(3, 10).
+        Maximum displacement in milliseconds. If None, drawn from U(3, 10).
     sampling_rate : float
         Neurogram sampling rate in Hz. Default 500 Hz.
 

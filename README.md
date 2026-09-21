@@ -69,8 +69,20 @@ tests build both models and are skipped when TensorFlow is not installed.
   - `generate_neurograms(task_id, num_tasks, false)` → clean (silence condition)
 
 ### ANSD Perturbations (Section 2.2)
-- **Uniform jitter**: δ_t ~ U(3, 10) ms, same shift for ALL channels at each time step
-- **Scattered jitter**: δ_{t,f} ~ U(3, 10) ms, independent per channel (temporal only)
+- **Uniform jitter**: a maximum displacement *J* ~ U(3, 10) ms is drawn per neurogram and
+  converted to *K* = round(*J* / 2 ms) samples (*K* ∈ {2, …, 5}); each time frame is then
+  shifted forward by an independent integer δ_t ~ U{0, …, *K*} samples, identical across all
+  channels
+- **Scattered jitter**: the same procedure with δ_{t,f} drawn independently per channel
+  (temporal only)
+- Because displacements are independent across frames, shifted frames can overwrite one another
+  and some positions receive no frame and stay silent. Jitter therefore combines temporal
+  desynchronisation with a loss of neural activity — roughly a third of frames are left silent
+  on synthetic input — in line with the view of auditory neuropathy as desynchronised and/or
+  reduced auditory-nerve activity (Zeng et al., 2005, *J Neurophysiol* 93:3050). At the 2 ms
+  resolution of the neurogram, displacements act on the temporal envelope rather than on
+  temporal fine structure, which waveform-level simulations jitter at sub-millisecond scale
+  (Pichora-Fuller et al., 2007, *Hear Res* 223:114).
 - **Fiber loss**: 1–4 randomly selected channels zeroed
 - **Truncation**: amplitude capped at α·max, α ~ U(0.3, 0.7)
 - Equal probability assignment (25% each)
